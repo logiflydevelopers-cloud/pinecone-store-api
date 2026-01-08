@@ -2,9 +2,7 @@ from app.workers.celery import celery
 
 from app.services.source_fetcher import fetch_source
 from app.services.pdf_extractor import extract_pages
-
 from app.crawlers.smart_crawler import smart_crawl
-
 from app.services.embeddings import build_embeddings
 from app.repos.redis_jobs import get_job_repo
 
@@ -26,13 +24,11 @@ def detect_pdf(url: str, content_type: str) -> bool:
 def _ingest_logic(
     jobId: str,
     userId: str,
-    convId: str,
     source,
 ):
     print("\n🚀 INGEST STARTED")
     print("jobId:", jobId)
     print("userId:", userId)
-    print("convId:", convId)
     print("source type:", type(source))
 
     jobs = get_job_repo()
@@ -46,7 +42,6 @@ def _ingest_logic(
             status="processing",
             stage="fetch",
             progress=5,
-            convId=convId,
         )
         print("📌 Job marked as processing")
 
@@ -102,7 +97,6 @@ def _ingest_logic(
 
             build_embeddings(
                 userId=userId,
-                convId=convId,
                 texts=texts,
                 sourceType="pdf",
                 pages=list(range(1, pages + 1)),
@@ -111,7 +105,7 @@ def _ingest_logic(
             print("✅ EMBEDDINGS DONE (PDF)")
 
         # ==================================================
-        # WEB INGESTION (SMART CRAWLER)
+        # WEB INGESTION
         # ==================================================
         else:
             print("🌐 START SMART WEB CRAWL")
@@ -136,7 +130,6 @@ def _ingest_logic(
 
                 build_embeddings(
                     userId=userId,
-                    convId=convId,
                     texts=[page["text"]],
                     sourceType="web",
                     url=page["url"],
@@ -158,26 +151,27 @@ def _ingest_logic(
 
 
 # --------------------------------------------------
-# Celery / Local Task Wrapper
+# Celery Task
 # --------------------------------------------------
-@celery.task(bind=True, name="ingest_document")
+@celery.task(
+    bind=True,
+    name="ingest_document",
+    queue="pinecone_queue",   # 👈 HARD ISOLATION
+)
 def ingest_document(self=None, *args, **kwargs):
     """
-    Works for BOTH:
-    - Celery async execution
-    - Local synchronous execution
+    Pinecone-store ingestion task
     """
 
     if kwargs:
         return _ingest_logic(
             kwargs["jobId"],
             kwargs["userId"],
-            kwargs["convId"],
             kwargs["source"],
         )
 
-    if len(args) == 4:
-        jobId, userId, convId, source = args
-        return _ingest_logic(jobId, userId, convId, source)
+    if len(args) == 3:
+        jobId, userId, source = args
+        return _ingest_logic(jobId, userId, source)
 
     raise RuntimeError("Invalid arguments passed to ingest_document")

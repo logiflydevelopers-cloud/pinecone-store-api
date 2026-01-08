@@ -10,9 +10,10 @@ load_dotenv()
 USE_CELERY = os.getenv("USE_CELERY", "true").lower() == "true"
 
 # 🔑 REDIS KEY PREFIX (CHANGE PER APP)
-# pinecone-store  -> "pinecone:"
-# pdf-web-api     -> "pdf:"
-REDIS_PREFIX = os.getenv("REDIS_PREFIX")
+REDIS_PREFIX = os.getenv("REDIS_PREFIX", "pinecone:")
+
+# ⏱️ JOB TTL (seconds) – default: 24 hours
+JOB_TTL_SECONDS = int(os.getenv("JOB_TTL_SECONDS", 60 * 60 * 24))
 
 # -------------------------------------------------
 # In-memory fallback (LOCAL DEV)
@@ -60,7 +61,7 @@ class InMemoryJobRepo:
 # -------------------------------------------------
 class RedisJobRepo:
     def __init__(self):
-        import redis  # lazy import (IMPORTANT)
+        import redis  # lazy import
         redis_url = os.environ.get("REDIS_URL")
         if not redis_url:
             raise RuntimeError("REDIS_URL is required in production")
@@ -80,7 +81,8 @@ class RedisJobRepo:
             "progress": 0,
             "createdAt": datetime.utcnow().isoformat(),
         }
-        self.client.set(self._key(jobId), json.dumps(data))
+        key = self._key(jobId)
+        self.client.set(key, json.dumps(data), ex=JOB_TTL_SECONDS)
         return data
 
     def update(self, jobId, **kwargs):
@@ -90,7 +92,9 @@ class RedisJobRepo:
             return
         data = json.loads(raw)
         data.update(kwargs)
-        self.client.set(key, json.dumps(data))
+
+        # 🔄 Refresh TTL on update
+        self.client.set(key, json.dumps(data), ex=JOB_TTL_SECONDS)
 
     def complete(self, jobId):
         self.update(jobId, status="done", progress=100, stage="done")
@@ -107,12 +111,9 @@ class RedisJobRepo:
 
 
 # -------------------------------------------------
-# Factory (used everywhere)
+# Factory
 # -------------------------------------------------
 def get_job_repo():
-    """
-    Returns the correct job repo based on environment.
-    """
     if USE_CELERY:
         return RedisJobRepo()
     return InMemoryJobRepo()

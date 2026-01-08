@@ -16,7 +16,6 @@ emb = OpenAIEmbeddings(model="text-embedding-3-small")
 def build_embeddings(
     *,
     userId: str,
-    convId: str,
     texts: List[str],
     sourceType: str,
     pages: Optional[List[int]] = None,   # PDF only
@@ -73,7 +72,6 @@ def build_embeddings(
         # -------------------------
         metadata = {
             "userId": userId,
-            "convId": convId,
             "chunkId": chunk_id,
             "sourceType": sourceType,
             "text": chunk,   # TEXT STORED IN PINECONE
@@ -95,6 +93,7 @@ def build_embeddings(
     # Upsert to Pinecone
     # -------------------------
     pinecone.upsert(
-        vectors=vectors,
-        namespace=namespace,
+    userId=userId,
+    vectors=vectors,
     )
+

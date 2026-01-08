@@ -16,37 +16,33 @@ jobs = get_job_repo()
 # --------------------------------------------------
 @router.post("/ingest", status_code=202)
 def ingest(req: IngestRequest):
-    job = jobs.create(req.convId)
+    # Create job (no convId)
+    job = jobs.create(sourceId=req.userId)
 
-    source = req.fileUrl or req.prompt
+    source = req.source.strip()
 
-    if not source or not isinstance(source, str) or not source.strip():
+    if not source:
         raise HTTPException(
             status_code=400,
-            detail="Either fileUrl or prompt must be provided as a non-empty string"
+            detail="source must be a non-empty string"
         )
 
-    source = source.strip()
-
-    # ALWAYS use keyword arguments
+    # Dispatch ingestion
     if USE_CELERY:
         ingest_document.delay(
             jobId=job["jobId"],
             userId=req.userId,
-            convId=req.convId,
             source=source,
         )
     else:
         ingest_document(
             jobId=job["jobId"],
             userId=req.userId,
-            convId=req.convId,
             source=source,
         )
 
     return {
         "jobId": job["jobId"],
-        "convId": req.convId,
         "status": "queued",
     }
 
@@ -57,8 +53,7 @@ def ingest(req: IngestRequest):
 @router.post("/ingest/pdf", status_code=202)
 async def ingest_pdf(
     file: UploadFile = File(...),
-    userId: str = Form(...),
-    convId: str = Form(...),
+    userId: str = Form(...)
 ):
     if file.content_type != "application/pdf":
         raise HTTPException(
@@ -66,7 +61,7 @@ async def ingest_pdf(
             detail="Only PDF files are allowed"
         )
 
-    job = jobs.create(convId)
+    job = jobs.create(userId)
 
     pdf_bytes = await file.read()
 
@@ -75,20 +70,17 @@ async def ingest_pdf(
         ingest_document.delay(
             jobId=job["jobId"],
             userId=userId,
-            convId=convId,
             source=pdf_bytes,  # BYTES
         )
     else:
         ingest_document(
             jobId=job["jobId"],
             userId=userId,
-            convId=convId,
             source=pdf_bytes,  # BYTES
         )
 
     return {
         "jobId": job["jobId"],
-        "convId": convId,
         "status": "queued",
     }
 

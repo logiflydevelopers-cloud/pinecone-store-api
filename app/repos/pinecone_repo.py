@@ -1,5 +1,3 @@
-# app/repos/pinecone_repo.py
-
 from pinecone import Pinecone
 import os
 from dotenv import load_dotenv
@@ -11,7 +9,7 @@ load_dotenv()
 class PineconeRepo:
     """
     Pinecone repository
-    - Stores embeddings + full text + metadata
+    - Stores embeddings + metadata
     - Namespace is STRICTLY userId
     - NO conversation-level tracking
     """
@@ -31,13 +29,14 @@ class PineconeRepo:
     # --------------------------------------------------
     def upsert(
         self,
+        *,
         userId: str,
         vectors: List[Dict],
-        batch_size: int = 100
+        batch_size: int = 100,
     ):
         """
-        Upserts vectors into a USER-SCOPED namespace.
-        No conversation isolation.
+        Upserts vectors into a USER-scoped namespace.
+        Namespace = userId ONLY.
         """
 
         if not vectors:
@@ -47,7 +46,7 @@ class PineconeRepo:
             batch = vectors[i:i + batch_size]
             self.index.upsert(
                 vectors=batch,
-                namespace=userId  # ONLY userId
+                namespace=userId,
             )
 
     # --------------------------------------------------
@@ -55,10 +54,11 @@ class PineconeRepo:
     # --------------------------------------------------
     def query(
         self,
+        *,
         userId: str,
         vector: List[float],
         top_k: int = 6,
-        metadata_filter: Optional[Dict] = None
+        metadata_filter: Optional[Dict] = None,
     ):
         """
         Queries vectors within USER namespace.
@@ -67,22 +67,22 @@ class PineconeRepo:
         return self.index.query(
             vector=vector,
             top_k=top_k,
-            namespace=userId,  # ONLY userId
+            namespace=userId,
             filter=metadata_filter,
-            include_metadata=True
+            include_metadata=True,
         )
 
     # --------------------------------------------------
     # Delete ALL data for a user
     # --------------------------------------------------
-    def delete_user(self, userId: str):
+    def delete_user(self, *, userId: str):
         """
         Deletes all vectors for a user.
         """
 
         self.index.delete(
             delete_all=True,
-            namespace=userId
+            namespace=userId,
         )
 
     # --------------------------------------------------
