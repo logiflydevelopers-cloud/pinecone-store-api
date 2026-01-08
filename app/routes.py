@@ -28,7 +28,7 @@ def ingest(req: IngestRequest):
 
     source = source.strip()
 
-    # ✅ ALWAYS use keyword arguments
+    # ALWAYS use keyword arguments
     if USE_CELERY:
         ingest_document.delay(
             jobId=job["jobId"],
@@ -70,20 +70,20 @@ async def ingest_pdf(
 
     pdf_bytes = await file.read()
 
-    # ✅ ALWAYS use keyword arguments
+    # ALWAYS use keyword arguments
     if USE_CELERY:
         ingest_document.delay(
             jobId=job["jobId"],
             userId=userId,
             convId=convId,
-            source=pdf_bytes,  # 🔥 BYTES
+            source=pdf_bytes,  # BYTES
         )
     else:
         ingest_document(
             jobId=job["jobId"],
             userId=userId,
             convId=convId,
-            source=pdf_bytes,  # 🔥 BYTES
+            source=pdf_bytes,  # BYTES
         )
 
     return {

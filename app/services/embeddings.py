@@ -53,7 +53,7 @@ def build_embeddings(
     pinecone = PineconeRepo()
 
     # Namespace = user isolation + conversation isolation
-    namespace = f"{userId}:{convId}"
+    namespace = userId
 
     vectors = []
 
