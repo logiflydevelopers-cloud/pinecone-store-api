@@ -7,7 +7,7 @@ import os
 from typing import List, Tuple
 
 OCR_ENABLE = os.getenv("OCR_ENABLE", "true").lower() == "true"
-OCR_MIN_TEXT_CHARS = int(os.getenv("OCR_MIN_TEXT_CHARS", 1000))
+OCR_MIN_TEXT_CHARS = int(os.getenv("OCR_MIN_TEXT_CHARS", 500))
 OCR_DPI = int(os.getenv("OCR_DPI", 220))
 OCR_LANG = os.getenv("OCR_LANG", "eng")
 
