@@ -6,9 +6,8 @@ import tempfile
 import os
 from typing import List, Tuple
 
-
 OCR_ENABLE = os.getenv("OCR_ENABLE", "true").lower() == "true"
-OCR_MIN_TEXT_CHARS = int(os.getenv("OCR_MIN_TEXT_CHARS", 80))
+OCR_MIN_TEXT_CHARS = int(os.getenv("OCR_MIN_TEXT_CHARS", 1000))
 OCR_DPI = int(os.getenv("OCR_DPI", 220))
 OCR_LANG = os.getenv("OCR_LANG", "eng")
 
@@ -16,7 +15,7 @@ OCR_LANG = os.getenv("OCR_LANG", "eng")
 def extract_pages(pdf_bytes: bytes) -> Tuple[List[str], int, int, List[int]]:
     """
     Extract text from PDF pages.
-    OCR fallback if text is too small.
+    OCR fallback if text is missing or too small.
 
     Returns:
     - page_texts
@@ -34,22 +33,26 @@ def extract_pages(pdf_bytes: bytes) -> Tuple[List[str], int, int, List[int]]:
 
     try:
         reader = PdfReader(pdf_path)
-        pages = len(reader.pages)
+        page_count = len(reader.pages)
 
         for i, page in enumerate(reader.pages):
             page_num = i + 1
 
+            # -------- normal extraction --------
             try:
-                raw = (page.extract_text() or "").strip()
+                raw_text = (page.extract_text() or "").strip()
             except Exception:
-                raw = ""
+                raw_text = ""
 
-            needs_ocr = (
+            final_text = raw_text
+
+            # -------- OCR decision --------
+            use_ocr = (
                 OCR_ENABLE
-                and len(raw) < OCR_MIN_TEXT_CHARS
+                and len(raw_text) < OCR_MIN_TEXT_CHARS
             )
 
-            if needs_ocr:
+            if use_ocr:
                 try:
                     images = convert_from_path(
                         pdf_path,
@@ -57,23 +60,28 @@ def extract_pages(pdf_bytes: bytes) -> Tuple[List[str], int, int, List[int]]:
                         first_page=page_num,
                         last_page=page_num,
                     )
+
                     ocr_text = pytesseract.image_to_string(
                         images[0],
                         lang=OCR_LANG
                     ).strip()
 
-                    if len(ocr_text) > len(raw):
-                        raw = ocr_text
+                    # prefer OCR if it gives more text
+                    if len(ocr_text) > len(raw_text):
+                        final_text = ocr_text
                         ocr_pages.append(page_num)
+
                 except Exception:
                     pass
 
-            texts.append(raw)
+            # IMPORTANT: only append non-empty text
+            if final_text.strip():
+                texts.append(final_text)
 
-        full_text = "\n\n".join(t for t in texts if t.strip())
+        full_text = "\n\n".join(texts)
         total_words = len(full_text.split())
 
-        return texts, pages, total_words, ocr_pages
+        return texts, page_count, total_words, ocr_pages
 
     finally:
         try:
