@@ -89,8 +89,22 @@ def _ingest_logic(
                 f"words={total_words}, ocr_pages={ocr_pages}"
             )
 
+            # ❗ SOFT FAIL (do NOT raise)
             if not texts:
-                raise ValueError("No text extracted from PDF")
+                print("⚠️ No usable text found in PDF (even after OCR)")
+                jobs.complete(
+                    jobId,
+                    meta={
+                        "status": "skipped",
+                        "reason": "no_text_after_ocr",
+                        "pages": pages,
+                        "ocr_pages": ocr_pages,
+                    },
+                )
+                return {
+                    "status": "skipped",
+                    "reason": "no_text_after_ocr",
+                }
 
             print("🧠 START EMBEDDINGS (PDF)")
             jobs.update(jobId, stage="embed", progress=60)
@@ -99,10 +113,11 @@ def _ingest_logic(
                 userId=userId,
                 texts=texts,
                 sourceType="pdf",
-                pages=list(range(1, pages + 1)),
+                pages=list(range(1, len(texts) + 1)),  # ✅ align with actual texts
             )
 
             print("✅ EMBEDDINGS DONE (PDF)")
+
 
         # ==================================================
         # WEB INGESTION
